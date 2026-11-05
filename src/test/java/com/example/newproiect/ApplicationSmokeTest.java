@@ -110,6 +110,11 @@ class ApplicationSmokeTest {
                 .andExpect(jsonPath("$.data.displayName").value("已修改用户"))
                 .andExpect(jsonPath("$.data.status").value(0));
 
+        mockMvc.perform(get("/api/users/{id}", userId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.displayName").value("已修改用户"))
+                .andExpect(jsonPath("$.data.status").value(0));
+
         mockMvc.perform(delete("/api/users/{id}", userId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));

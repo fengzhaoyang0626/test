@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.example.newproiect.common.api.PageResponse;
 import com.example.newproiect.common.exception.BusinessException;
 import com.example.newproiect.common.exception.ErrorCode;
+import com.example.newproiect.system.user.cache.UserCacheService;
 import com.example.newproiect.system.user.dto.CreateUserRequest;
 import com.example.newproiect.system.user.dto.UpdateUserRequest;
 import com.example.newproiect.system.user.dto.UserResponse;
@@ -26,10 +27,12 @@ import java.util.Locale;
 public class UserServiceImpl implements UserService {
 
     private final UserMapper userMapper;
+    private final UserCacheService userCache;
     private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
-    public UserServiceImpl(UserMapper userMapper) {
+    public UserServiceImpl(UserMapper userMapper, UserCacheService userCache) {
         this.userMapper = userMapper;
+        this.userCache = userCache;
     }
 
     @Override
@@ -52,7 +55,11 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public UserResponse getById(Long id) {
-        return toResponse(requireUser(id));
+        return userCache.find(id).orElseGet(() -> {
+            UserResponse user = toResponse(requireUser(id));
+            userCache.put(user);
+            return user;
+        });
     }
 
     @Override
@@ -107,7 +114,9 @@ public class UserServiceImpl implements UserService {
         entity.setPhone(normalizeOptional(request.phone()));
         entity.setStatus(request.status());
         userMapper.updateById(entity);
-        return toResponse(requireUser(id));
+        UserResponse updatedUser = toResponse(requireUser(id));
+        userCache.evict(id);
+        return updatedUser;
     }
 
     @Override
@@ -115,6 +124,7 @@ public class UserServiceImpl implements UserService {
     public void delete(Long id) {
         requireUser(id);
         userMapper.deleteById(id);
+        userCache.evict(id);
     }
 
     private void ensureUsernameAvailable(String username) {

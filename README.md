@@ -1,6 +1,6 @@
 # newproiect 简易管理系统
 
-这是第一阶段版本，包含一个可运行的 Spring Boot 后端和用户管理接口。当前没有 Docker、登录认证、Redis、MQ 和多线程功能。
+这是一个可运行的 Spring Boot 后端和用户管理接口。当前已接入 Redis 缓存和 Git 版本管理，暂未引入 Docker、登录认证、MQ 和多线程功能。
 
 ## 已实现功能
 
@@ -12,6 +12,8 @@
 - 参数校验和统一错误响应
 - Swagger UI 在线接口文档
 - Actuator 健康检查
+- Redis 用户详情缓存，修改和删除时主动失效
+- Redis 不可用时自动回退数据库
 - 控制器与响应模型的基础测试
 
 ## 本地环境
@@ -20,6 +22,7 @@
 
 1. JDK 17 或更高版本
 2. MySQL 8
+3. Redis
 
 Maven 不需要单独安装，项目已经包含 Maven Wrapper。
 
@@ -59,7 +62,55 @@ export DB_USERNAME='root'
 export DB_PASSWORD='你的数据库密码'
 ```
 
-## 3. 启动项目
+## 3. 配置 Redis
+
+项目默认连接本机 Redis：
+
+```text
+地址：localhost
+端口：6379
+数据库：0
+密码：空
+缓存有效期：30 分钟
+```
+
+如果 Redis 配置不同，可以通过环境变量覆盖：
+
+```bash
+export REDIS_HOST='localhost'
+export REDIS_PORT='6379'
+export REDIS_PASSWORD=''
+export REDIS_DATABASE='0'
+export USER_CACHE_TTL='30m'
+```
+
+确认 Redis 可用：
+
+```bash
+redis-cli ping
+```
+
+正常会返回：
+
+```text
+PONG
+```
+
+用户详情缓存 Key 的格式为：
+
+```text
+newproiect:user:{用户ID}
+```
+
+例如查询 ID 为 `1` 的用户后，可以查看：
+
+```bash
+redis-cli GET 'newproiect:user:1'
+```
+
+Redis 暂时不可用时，应用仍会从 MySQL 查询数据，不会因为缓存故障停止服务。
+
+## 4. 启动项目
 
 在项目目录执行：
 
@@ -80,7 +131,7 @@ Started NewproiectApplication
 http://localhost:8080/actuator/health
 ```
 
-## 4. 使用 Swagger 调试接口
+## 5. 使用 Swagger 调试接口
 
 Swagger 可以理解成“自动生成的接口说明书 + 在线调用工具”。启动项目后打开：
 
@@ -136,6 +187,8 @@ http://localhost:8080/swagger-ui.html
 
 ```text
 GET    /api/users/{id}
+GET    /api/users/list
+GET    /api/users/list?id=1
 GET    /api/users?page=1&size=10&keyword=demo&status=1
 PUT    /api/users/{id}
 DELETE /api/users/{id}
@@ -149,7 +202,7 @@ Swagger UI 底部的 `Schemas` 区域可以查看每个请求体和响应字段�
 http://localhost:8080/v3/api-docs
 ```
 
-## 5. 响应格式
+## 6. 响应格式
 
 成功响应：
 
@@ -177,15 +230,28 @@ http://localhost:8080/v3/api-docs
 }
 ```
 
-## 6. 运行测试
+## 7. 运行测试
 
 ```bash
 ./mvnw test
 ```
 
-当前测试不依赖 MySQL，因此不需要先启动数据库。
+当前测试使用 H2 内存数据库，不依赖本地 MySQL。Redis 不可用时缓存会自动回退，因此测试也不强制依赖 Redis。
 
-## 7. 项目结构
+## 8. Git 版本管理
+
+项目已经初始化为 Git 仓库，当前分支为 `main`。日常提交步骤：
+
+```bash
+git status
+git add .
+git commit -m "feat: describe your change"
+git log --oneline
+```
+
+构建产物 `target/`、IDE 配置 `.idea/`、日志和环境变量文件已经写入 `.gitignore`，不会被提交。
+
+## 9. 项目结构
 
 ```text
 src/main/java/com/example/newproiect
@@ -195,6 +261,7 @@ src/main/java/com/example/newproiect
 │   └── exception    # 错误码和全局异常处理
 └── system
     └── user
+        ├── cache      # Redis 用户缓存
         ├── controller
         ├── dto
         ├── entity
@@ -216,6 +283,10 @@ src/main/java/com/example/newproiect
 
 当前采用逻辑删除，删除操作会把 `deleted` 字段改为 `1`，普通查询不会再返回该记录。
 
+### Redis 连接失败会不会影响查询
+
+不会。缓存读写失败时会回退到 MySQL，同时会在应用日志中记录警告。Redis 恢复后，后续查询会自动重新写入缓存。
+
 ## 下一阶段
 
 后续建议依次增加：
@@ -223,8 +294,7 @@ src/main/java/com/example/newproiect
 1. 部门与角色管理
 2. Spring Security、登录和权限校验
 3. 更完整的单元测试和集成测试
-4. Redis 缓存
-5. MQ 异步处理
-6. 线程池和批量任务
+4. MQ 异步处理
+5. 线程池和批量任务
 
 当前版本还没有登录认证，只适合本地开发，不要直接暴露到公网。
