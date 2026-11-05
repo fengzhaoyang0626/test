@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 import java.time.Duration;
+import java.util.List;
 import java.util.Optional;
 
 @Component
@@ -46,7 +47,18 @@ public class UserCacheService {
             return Optional.empty();
         }
     }
-
+    public Optional<UserResponse> findname(String name) {
+        try {
+            String json = redisTemplate.opsForValue().get(name);
+            if (!StringUtils.hasText(json)) {
+                return Optional.empty();
+            }
+            return Optional.of(objectMapper.readValue(json, UserResponse.class));
+        } catch (DataAccessException | JsonProcessingException exception) {
+            log.warn("Failed to read user cache for id={}: {}", name, exception.getMessage());
+            return Optional.empty();
+        }
+    }
     public void put(UserResponse user) {
         try {
             String json = objectMapper.writeValueAsString(user);
@@ -55,7 +67,14 @@ public class UserCacheService {
             log.warn("Failed to write user cache for id={}: {}", user.id(), exception.getMessage());
         }
     }
-
+    public void putList(List<UserResponse> list) {
+        try {
+            String json = objectMapper.writeValueAsString(list);
+            redisTemplate.opsForValue().set(("111"), json, userTtl);
+        } catch (DataAccessException | JsonProcessingException exception) {
+            log.warn("Failed to write user cache for id={}: {}", exception.getMessage());
+        }
+    }
     public void evict(Long id) {
         try {
             redisTemplate.delete(key(id));

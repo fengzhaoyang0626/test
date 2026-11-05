@@ -22,6 +22,7 @@ import org.springframework.util.StringUtils;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 
 @Service
 public class UserServiceImpl implements UserService {
@@ -63,16 +64,21 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public List<UserResponse> queryList(Long id) {
-        QueryWrapper<UserEntity> queryList = new QueryWrapper<>();
-        List<UserResponse> userResponses =new ArrayList<>(); ;
-        queryList.eq("id",id);
+    public List<UserResponse> queryList(String name) {
+        List<UserResponse> userResponses =new ArrayList<>();
+        Optional<UserResponse> userResponse = userCache.findname(name);
+        if(!userResponse.isEmpty()){
+            userResponses.add(userResponse.get());
+        }
+        QueryWrapper<UserEntity> queryList = new QueryWrapper<>();;
+        queryList.eq("email",name);
         List<UserEntity> userEntity=userMapper.selectList(queryList);
         for (UserEntity user:
                 userEntity) {
             UserResponse response = toResponse(user);
             userResponses.add(response);
         }
+        userCache.putList(userResponses);
         return userResponses;
     }
 

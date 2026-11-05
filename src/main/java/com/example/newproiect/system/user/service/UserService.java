@@ -13,7 +13,7 @@ public interface UserService {
 
     UserResponse getById(Long id);
 
-    List<UserResponse> queryList(Long id);
+    List<UserResponse> queryList(String name);
 
     PageResponse<UserResponse> page(int page, int size, String keyword, Integer status);
 

@@ -58,13 +58,11 @@ public class UserController {
     ) {
         return ApiResponse.ok(userService.getById(id));
     }
-    @Operation(summary = "查询用户列表", description = "不传 id 时查询全部用户，传入 id 时只返回该用户。")
+    @Operation(summary = "查询用户列表", description = "")
     @GetMapping("/list")
-    public ApiResponse<List<UserResponse>> list(
-            @Parameter(description = "可选的用户 ID，不传则查询全部")
-            @RequestParam(required = false) @Min(1) Long id
+    public ApiResponse<List<UserResponse>> list(String name
     ) {
-        return ApiResponse.ok(userService.queryList(id));
+        return ApiResponse.ok(userService.queryList(name));
     }
 
     @Operation(summary = "分页查询用户", description = "keyword 会同时匹配用户名、显示名称和邮箱。")
