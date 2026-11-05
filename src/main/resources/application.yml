@@ -38,10 +38,15 @@ app:
     user-ttl: ${USER_CACHE_TTL:30m}
   thread-pool:
     user-batch:
+      # 平时保留的线程数量
       core-size: ${USER_BATCH_CORE_SIZE:4}
+      # 任务很多时最多创建的线程数量
       max-size: ${USER_BATCH_MAX_SIZE:8}
+      # 线程都忙时，最多排队多少个任务
       queue-capacity: ${USER_BATCH_QUEUE_CAPACITY:100}
+      # 空闲线程保留多久
       keep-alive: ${USER_BATCH_KEEP_ALIVE:60s}
+      # 主线程等待单个任务结果的最长时间
       task-timeout: ${USER_BATCH_TASK_TIMEOUT:5s}
 
 mybatis-plus:

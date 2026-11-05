@@ -151,6 +151,79 @@ export USER_BATCH_TASK_TIMEOUT='5s'
 
 当前批量操作只做并发读查询。后续增加并发写操作时，需要额外处理事务边界、幂等和重复提交；不要假设主线程的事务或 ThreadLocal 会自动传递到工作线程。
 
+### 一次批量请求的完整过程
+
+假设请求是：
+
+```json
+{
+  "ids": [1, 1, 2]
+}
+```
+
+代码会按照下面的顺序执行：
+
+1. `UserController.batchQuery` 接收 JSON，并把请求交给 `BatchUserQueryService.query`。
+2. `removeDuplicateIds` 去掉重复 ID，得到 `[1, 2]`。
+3. `submitTasks` 为用户 1 创建 `UserQueryTask`，提交给线程池，并拿到一个 `Future`。
+4. `submitTasks` 再为用户 2 创建任务，提交给线程池，再拿到一个 `Future`。
+5. 线程池中的工作线程执行 `UserQueryTask.call`，调用 `userService.getById` 查询用户。
+6. `userService.getById` 先查 Redis；缓存不存在时再查 MySQL。
+7. `waitForResults` 等待两个 `Future` 的结果。每个结果最多等待 5 秒。
+8. 用户 1 查询成功、用户 2 不存在时，会分别生成成功和失败结果。
+9. `countSuccess` 统计成功数量，最后组装 `BatchUserQueryResponse`。
+
+返回结果大致如下：
+
+```json
+{
+  "success": true,
+  "code": "OK",
+  "message": "请求成功",
+  "data": {
+    "results": [
+      {
+        "id": 1,
+        "success": true,
+        "user": {
+          "id": 1,
+          "username": "demo_user"
+        }
+      },
+      {
+        "id": 2,
+        "success": false,
+        "errorCode": "USER_NOT_FOUND",
+        "message": "用户不存在"
+      }
+    ],
+    "successCount": 1,
+    "failureCount": 1
+  }
+}
+```
+
+### 建议的代码阅读顺序
+
+不要一开始就同时看所有文件，可以按下面顺序逐个阅读：
+
+1. [UserController.java](src/main/java/com/example/newproiect/system/user/controller/UserController.java)：接收 HTTP 请求。
+2. [BatchUserQueryService.java](src/main/java/com/example/newproiect/system/user/service/BatchUserQueryService.java)：拆成“去重、提交、等待、统计”四个普通方法。
+3. [UserQueryTask.java](src/main/java/com/example/newproiect/system/user/task/UserQueryTask.java)：线程真正执行的查询任务。
+4. [ThreadPoolConfig.java](src/main/java/com/example/newproiect/common/config/ThreadPoolConfig.java)：创建线程池并设置线程数量。
+5. [application.yml](src/main/resources/application.yml)：修改线程池参数，不需要修改 Java 代码。
+
+多线程的核心代码使用普通 `for` 循环、`Future.get()` 和独立的 `try/catch`。这样虽然代码行数多一些，但每一步在做什么可以直接从上往下阅读。
+
+### 几个名词的简单解释
+
+- `ThreadPoolTaskExecutor`：管理一组工作线程，把任务交给这些线程执行。
+- `Callable`：一个可以返回结果的任务，结果类型写在尖括号中。
+- `Future`：任务提交后得到的结果凭证，`get()` 表示等待并取出最终结果。
+- `timeout`：最多等待多久，避免请求一直卡住。
+- `keep-alive`：工作线程空闲多久后被回收。
+- `CallerRunsPolicy`：线程和队列都满时，由提交任务的线程自己执行任务，防止任务凭空消失。
+
 ## 5. 启动项目
 
 在项目目录执行：
@@ -307,7 +380,8 @@ src/main/java/com/example/newproiect
         ├── dto
         ├── entity
         ├── mapper
-        └── service
+        ├── service
+        └── task       # 线程池执行的具体任务
 ```
 
 ## 常见问题
