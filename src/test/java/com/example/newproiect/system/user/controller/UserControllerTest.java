@@ -3,6 +3,7 @@ package com.example.newproiect.system.user.controller;
 import com.example.newproiect.common.exception.GlobalExceptionHandler;
 import com.example.newproiect.system.user.dto.CreateUserRequest;
 import com.example.newproiect.system.user.dto.UserResponse;
+import com.example.newproiect.system.user.service.BatchUserQueryService;
 import com.example.newproiect.system.user.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,11 +26,14 @@ class UserControllerTest {
     @Mock
     private UserService userService;
 
+    @Mock
+    private BatchUserQueryService batchUserQueryService;
+
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
-        UserController controller = new UserController(userService);
+        UserController controller = new UserController(userService, batchUserQueryService);
         mockMvc = MockMvcBuilders
                 .standaloneSetup(controller)
                 .setControllerAdvice(new GlobalExceptionHandler())

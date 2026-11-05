@@ -44,7 +44,7 @@ class ApplicationSmokeTest {
 
     @Test
     void shouldCreateAndReadUser() throws Exception {
-        mockMvc.perform(post("/api/users")
+        MvcResult createResult = mockMvc.perform(post("/api/users")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -57,7 +57,8 @@ class ApplicationSmokeTest {
                                 }
                                 """))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.data.username").value("smoke_user"));
+                .andExpect(jsonPath("$.data.username").value("smoke_user"))
+                .andReturn();
 
         mockMvc.perform(get("/api/users")
                         .param("page", "1")
@@ -66,6 +67,27 @@ class ApplicationSmokeTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.total").value(1))
                 .andExpect(jsonPath("$.data.records[0].username").value("smoke_user"));
+
+        Number idValue = JsonPath.read(
+                createResult.getResponse().getContentAsString(),
+                "$.data.id"
+        );
+        assertThat(idValue).isNotNull();
+        long userId = idValue.longValue();
+
+        mockMvc.perform(post("/api/users/batch-query")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "ids": [%d, %d, 999999]
+                                }
+                                """.formatted(userId, userId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.results.length()").value(2))
+                .andExpect(jsonPath("$.data.successCount").value(1))
+                .andExpect(jsonPath("$.data.failureCount").value(1))
+                .andExpect(jsonPath("$.data.results[0].user.username").value("smoke_user"))
+                .andExpect(jsonPath("$.data.results[1].errorCode").value("USER_NOT_FOUND"));
     }
 
     @Test
@@ -90,12 +112,6 @@ class ApplicationSmokeTest {
         assertThat(idValue).isNotNull();
         long userId = idValue.longValue();
 
-        mockMvc.perform(get("/api/users/list")
-                        .param("id", String.valueOf(userId)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.length()").value(1))
-                .andExpect(jsonPath("$.data[0].id").value(userId));
-
         mockMvc.perform(put("/api/users/{id}", userId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -109,6 +125,12 @@ class ApplicationSmokeTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.displayName").value("已修改用户"))
                 .andExpect(jsonPath("$.data.status").value(0));
+
+        mockMvc.perform(get("/api/users/list")
+                        .param("name", "updated@example.com"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].id").value(userId));
 
         mockMvc.perform(get("/api/users/{id}", userId))
                 .andExpect(status().isOk())

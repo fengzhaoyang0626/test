@@ -34,7 +34,15 @@ server:
 
 app:
   cache:
+    user-enabled: ${USER_CACHE_ENABLED:true}
     user-ttl: ${USER_CACHE_TTL:30m}
+  thread-pool:
+    user-batch:
+      core-size: ${USER_BATCH_CORE_SIZE:4}
+      max-size: ${USER_BATCH_MAX_SIZE:8}
+      queue-capacity: ${USER_BATCH_QUEUE_CAPACITY:100}
+      keep-alive: ${USER_BATCH_KEEP_ALIVE:60s}
+      task-timeout: ${USER_BATCH_TASK_TIMEOUT:5s}
 
 mybatis-plus:
   configuration:

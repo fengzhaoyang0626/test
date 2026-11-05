@@ -22,6 +22,17 @@ management:
     redis:
       enabled: false
 
+app:
+  cache:
+    user-enabled: false
+  thread-pool:
+    user-batch:
+      core-size: 2
+      max-size: 4
+      queue-capacity: 10
+      keep-alive: 10s
+      task-timeout: 1s
+
 logging:
   level:
     com.example.newproiect: warn

@@ -24,18 +24,24 @@ public class UserCacheService {
     private final StringRedisTemplate redisTemplate;
     private final ObjectMapper objectMapper;
     private final Duration userTtl;
+    private final boolean enabled;
 
     public UserCacheService(
             StringRedisTemplate redisTemplate,
             ObjectMapper objectMapper,
-            @Value("${app.cache.user-ttl:30m}") Duration userTtl
+            @Value("${app.cache.user-ttl:30m}") Duration userTtl,
+            @Value("${app.cache.user-enabled:true}") boolean enabled
     ) {
         this.redisTemplate = redisTemplate;
         this.objectMapper = objectMapper;
         this.userTtl = userTtl;
+        this.enabled = enabled;
     }
 
     public Optional<UserResponse> find(Long id) {
+        if (!enabled) {
+            return Optional.empty();
+        }
         try {
             String json = redisTemplate.opsForValue().get(key(id));
             if (!StringUtils.hasText(json)) {
@@ -48,6 +54,9 @@ public class UserCacheService {
         }
     }
     public Optional<UserResponse> findname(String name) {
+        if (!enabled) {
+            return Optional.empty();
+        }
         try {
             String json = redisTemplate.opsForValue().get(name);
             if (!StringUtils.hasText(json)) {
@@ -60,6 +69,9 @@ public class UserCacheService {
         }
     }
     public void put(UserResponse user) {
+        if (!enabled) {
+            return;
+        }
         try {
             String json = objectMapper.writeValueAsString(user);
             redisTemplate.opsForValue().set(key(user.id()), json, userTtl);
@@ -68,6 +80,9 @@ public class UserCacheService {
         }
     }
     public void putList(List<UserResponse> list) {
+        if (!enabled) {
+            return;
+        }
         try {
             String json = objectMapper.writeValueAsString(list);
             redisTemplate.opsForValue().set(("111"), json, userTtl);
@@ -76,6 +91,9 @@ public class UserCacheService {
         }
     }
     public void evict(Long id) {
+        if (!enabled) {
+            return;
+        }
         try {
             redisTemplate.delete(key(id));
         } catch (DataAccessException exception) {

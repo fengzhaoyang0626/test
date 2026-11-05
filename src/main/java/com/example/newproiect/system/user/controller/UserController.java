@@ -2,9 +2,12 @@ package com.example.newproiect.system.user.controller;
 
 import com.example.newproiect.common.api.ApiResponse;
 import com.example.newproiect.common.api.PageResponse;
+import com.example.newproiect.system.user.dto.BatchUserQueryRequest;
+import com.example.newproiect.system.user.dto.BatchUserQueryResponse;
 import com.example.newproiect.system.user.dto.CreateUserRequest;
 import com.example.newproiect.system.user.dto.UpdateUserRequest;
 import com.example.newproiect.system.user.dto.UserResponse;
+import com.example.newproiect.system.user.service.BatchUserQueryService;
 import com.example.newproiect.system.user.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -31,13 +34,18 @@ import java.util.List;
 @Validated
 @RestController
 @RequestMapping("/api/users")
-@Tag(name = "用户管理", description = "用户的新增、查询、修改和逻辑删除")
+@Tag(name = "用户管理", description = "用户的新增、查询、批量查询、修改和逻辑删除")
 public class UserController {
 
     private final UserService userService;
+    private final BatchUserQueryService batchUserQueryService;
 
-    public UserController(UserService userService) {
+    public UserController(
+            UserService userService,
+            BatchUserQueryService batchUserQueryService
+    ) {
         this.userService = userService;
+        this.batchUserQueryService = batchUserQueryService;
     }
 
     @Operation(summary = "新增用户", description = "密码会使用 BCrypt 加密后保存，接口不会返回密码。")
@@ -58,6 +66,18 @@ public class UserController {
     ) {
         return ApiResponse.ok(userService.getById(id));
     }
+
+    @Operation(
+            summary = "批量查询用户",
+            description = "使用有界线程池并发查询，最多 100 个 ID。单个用户失败不会影响其他结果。"
+    )
+    @PostMapping("/batch-query")
+    public ApiResponse<BatchUserQueryResponse> batchQuery(
+            @Valid @RequestBody BatchUserQueryRequest request
+    ) {
+        return ApiResponse.ok(batchUserQueryService.query(request));
+    }
+
     @Operation(summary = "查询用户列表", description = "")
     @GetMapping("/list")
     public ApiResponse<List<UserResponse>> list(String name

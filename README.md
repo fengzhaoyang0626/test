@@ -1,6 +1,6 @@
 # newproiect 简易管理系统
 
-这是一个可运行的 Spring Boot 后端和用户管理接口。当前已接入 Redis 缓存和 Git 版本管理，暂未引入 Docker、登录认证、MQ 和多线程功能。
+这是一个可运行的 Spring Boot 后端和用户管理接口。当前已接入 Redis 缓存、多线程批量查询和 Git 版本管理，暂未引入 Docker、登录认证和 MQ。
 
 ## 已实现功能
 
@@ -14,6 +14,7 @@
 - Actuator 健康检查
 - Redis 用户详情缓存，修改和删除时主动失效
 - Redis 不可用时自动回退数据库
+- 有界线程池批量查询用户，单项失败隔离并支持超时
 - 控制器与响应模型的基础测试
 
 ## 本地环境
@@ -110,7 +111,47 @@ redis-cli GET 'newproiect:user:1'
 
 Redis 暂时不可用时，应用仍会从 MySQL 查询数据，不会因为缓存故障停止服务。
 
-## 4. 启动项目
+## 4. 多线程批量查询
+
+批量查询接口：
+
+```text
+POST /api/users/batch-query
+```
+
+请求体：
+
+```json
+{
+  "ids": [1, 2, 3]
+}
+```
+
+线程池默认配置：
+
+```text
+核心线程数：4
+最大线程数：8
+队列容量：100
+结果等待超时：5 秒
+拒绝策略：CallerRunsPolicy
+```
+
+队列满时由调用线程执行任务，通过回压避免无限堆积。可以通过环境变量调整：
+
+```bash
+export USER_BATCH_CORE_SIZE='4'
+export USER_BATCH_MAX_SIZE='8'
+export USER_BATCH_QUEUE_CAPACITY='100'
+export USER_BATCH_KEEP_ALIVE='60s'
+export USER_BATCH_TASK_TIMEOUT='5s'
+```
+
+接口一次最多接收 100 个 ID，重复 ID 会自动去重。每个 ID 独立返回成功或失败，不会因为单个用户不存在而导致整批请求失败。
+
+当前批量操作只做并发读查询。后续增加并发写操作时，需要额外处理事务边界、幂等和重复提交；不要假设主线程的事务或 ThreadLocal 会自动传递到工作线程。
+
+## 5. 启动项目
 
 在项目目录执行：
 
@@ -131,7 +172,7 @@ Started NewproiectApplication
 http://localhost:8080/actuator/health
 ```
 
-## 5. 使用 Swagger 调试接口
+## 6. 使用 Swagger 调试接口
 
 Swagger 可以理解成“自动生成的接口说明书 + 在线调用工具”。启动项目后打开：
 
@@ -187,9 +228,9 @@ http://localhost:8080/swagger-ui.html
 
 ```text
 GET    /api/users/{id}
-GET    /api/users/list
-GET    /api/users/list?id=1
+GET    /api/users/list?name=demo@example.com
 GET    /api/users?page=1&size=10&keyword=demo&status=1
+POST   /api/users/batch-query
 PUT    /api/users/{id}
 DELETE /api/users/{id}
 ```
@@ -202,7 +243,7 @@ Swagger UI 底部的 `Schemas` 区域可以查看每个请求体和响应字段�
 http://localhost:8080/v3/api-docs
 ```
 
-## 6. 响应格式
+## 7. 响应格式
 
 成功响应：
 
@@ -230,15 +271,15 @@ http://localhost:8080/v3/api-docs
 }
 ```
 
-## 7. 运行测试
+## 8. 运行测试
 
 ```bash
 ./mvnw test
 ```
 
-当前测试使用 H2 内存数据库，不依赖本地 MySQL。Redis 不可用时缓存会自动回退，因此测试也不强制依赖 Redis。
+当前测试使用 H2 内存数据库，并在测试配置中关闭 Redis，不依赖本地 MySQL 和 Redis。
 
-## 8. Git 版本管理
+## 9. Git 版本管理
 
 项目已经初始化为 Git 仓库，当前分支为 `main`。日常提交步骤：
 
@@ -251,13 +292,13 @@ git log --oneline
 
 构建产物 `target/`、IDE 配置 `.idea/`、日志和环境变量文件已经写入 `.gitignore`，不会被提交。
 
-## 9. 项目结构
+## 10. 项目结构
 
 ```text
 src/main/java/com/example/newproiect
 ├── common
 │   ├── api          # 统一响应和分页
-│   ├── config       # MyBatis-Plus、审计字段、Swagger 配置
+│   ├── config       # MyBatis-Plus、线程池、审计字段、Swagger 配置
 │   └── exception    # 错误码和全局异常处理
 └── system
     └── user
@@ -295,6 +336,5 @@ src/main/java/com/example/newproiect
 2. Spring Security、登录和权限校验
 3. 更完整的单元测试和集成测试
 4. MQ 异步处理
-5. 线程池和批量任务
 
 当前版本还没有登录认证，只适合本地开发，不要直接暴露到公网。
